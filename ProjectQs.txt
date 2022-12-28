@@ -1,0 +1,314 @@
+ The project should contain the following: 
+ 
+• Primary key constraint 
+	
+	See table - 'film_tvseries.catalog
+ 
+• Foreign key constraint 
+
+	See table - 'film_tvseries.plan
+
+• A sequence  
+
+Create Sequence film_tvseriesSequence noCache;
+
+• A cursor  
+--Find out all the movies starring particular actor 
+ declare cursor b_willis_cursor
+     is select title from catalog
+     where actor = 'Bruce Willis';
+     
+     v_title catalog.title%type;
+     
+     begin
+     open b_willis_cursor;
+     
+        loop 
+            fetch b_willis_cursor into v_title;
+            exit when b_willis_cursor%notfound;
+            dbms_output.put_line(v_title);
+            
+            end loop;
+            close b_willis_cursor;
+     end;
+     
+
+
+• A view  
+--This is a view to find out the tv series on offer
+create or replace view tvseries_view as 
+     select title from catalog
+     where tv_series = 'Yes';
+
+/* Example below
+select * from tvseries_view;
+/*
+
+
+• A trigger  
+/*This is an audit table that tracks when the adminsistrator adds an entry to the film catalog
+The entry is logged on the table catalog_audit_title*/
+--Below is the table
+/*
+create table catalog_audit_title(
+	title varchar2(100),
+	operation varchar2(100),
+	op_date date,
+	by_user varchar2(100)
+
+
+);
+*/
+create or replace trigger  catalog_audit_title_record
+   after insert  
+   on catalog
+   for each row
+   begin 
+   if inserting then 
+   insert into catalog_audit_title(title, operation, op_date, by_user)
+   values (:new.title, 'Inserting', sysdate, user);
+   end if;
+
+end;
+
+• 2 procedures
+
+--Procedure 1
+create or replace procedure add_member(v_email member.email%type, v_fname member.fname%type, v_lname member.lname%type, v_dob member.dob%type, v_join_date member.join_date%type, v_membership_plan member.membership_plan%type, v_membership_price member.membership_price%type , v_address member.address%type, v_credit_card_no member.credit_card_no%type, v_member_until member.member_until%type, v_auto_renew_member member.auto_renew_member%type)
+    is
+begin
+    --insert all the variables below. Email has the unique constraint here
+    insert into member(email, fname, lname, dob, join_date, membership_plan, membership_price, address, credit_card_no, member_until, auto_renew_member)
+    values(v_email, v_fname, v_lname, v_dob, v_join_date, v_membership_plan, v_membership_price, v_address, v_credit_card_no, v_member_until, v_auto_renew_member);
+    dbms_output.put_line('Inserted new member with email ' || v_email);
+    
+    --exception handling to let the user know if they have tried to add a user with an email that already exists on the data base
+    exception 
+    when dup_val_on_index then
+    dbms_output.put_line('Member not added! Duplicate email, please change'); 
+end;
+
+/* Example below
+
+execute add_member('tedokeeffe@gmail.com', 'Ted', 'OKeeffe', date '1986-07-15', current_timestamp, 'Full', 9.99, '11 Ennis Grove', 0000111100000004, current_timestamp + 30, 'Yes');
+
+/*
+
+
+--Procedure to show that trigger works. Second procedure relating to question after this
+
+--This procedure is used for my trigger to make a note of every new film that is inserted
+create or replace procedure add_film(v_film_tvseries_id catalog.film_tvseries_id%type, v_title catalog.title%type, v_genre catalog.genre%type, v_rating catalog.rating%type, v_actor catalog.actor%type, v_director catalog.director%type, v_available_until catalog.available_until%type , v_tv_series catalog.tv_series%type, v_film catalog.film%type)-- v_member_until member.member_until%type, v_auto_renew_member member.auto_renew_member%type)
+is
+begin
+--declare member is film_tvseries.member;
+    insert into catalog(film_tvseries_id, title, genre, rating, actor, director, available_until, tv_series, film)
+    values(v_film_tvseries_id, v_title, v_genre, v_rating, v_actor, v_director, v_available_until, v_tv_series, v_film);-- v_member_until, v_auto_renew_member);
+    dbms_output.put_line('Inserted new film with title ' || v_title);
+end;
+
+/* Example below
+
+execute add_film(film_tvseriesSequence.nextval, 'Die Hard 2', 'Action', '15a', 'Bruce Willis',  'John McTiernan', date '2020-12-24', 'No', 'Yes');
+*/
+
+
+
+
+
+---Procedure 2
+
+ --This is a procedure to increase the price of a particular member using their email address
+    create or replace procedure membership_price_inc
+    --2 variables - email and the amount of the price increase
+        (m_email in varchar2, m_price_inc in number)
+    is
+      
+        begin
+       
+    update member
+    --set the price to be the current price plus the amount of the price increase
+        set membership_price = membership_price + m_price_inc
+    --where the email in the data table is equal to the variable that the user inputs
+        where email = m_email;
+        dbms_output.put_line('**Check script output** Increased member price sucessfully ' || m_email  || '  member price increased by ' ||  m_price_inc || ' euro');
+    --error handling to let the user know if they have input an email that does not exist on the data base.
+    --make use of sql%notfound to check if email exists on the data base, if not, then raise error
+    if sql%notfound then 
+    
+        raise_application_error(-20000, 'Procedure executed successfully however email input does not exist on the data base. 
+        Please check email and re-enter');--invalid email;
+        
+    end if;
+        commit;
+    end;
+ 
+   
+/* Example below
+
+execute membership_price_inc('rorytokeeffe@gmail.com', 1);
+
+*/
+
+• 2 functions  
+
+--function to get the age of a customer based on email address
+create or replace function get_age
+--1 variable which is email
+    (contact varchar2)
+--which returns a number - age
+    return number 
+
+    is age number;
+begin 
+--get the number of months between the system date and date of birth
+    select trunc(months_between(SYSDATE, dob) / 12) as agenow into age from member
+--where the email is what is provided by the user   
+    where email=contact;
+return age;
+--exception to handle if an incorrect email is input
+exception
+    when others then
+   raise_application_error(-20001,'An error was encountered - '||06512||' -**Please check email spelling**- ');
+end;
+
+
+/* Example below
+declare 
+age number;
+begin
+age:=get_age('rorytokeeffe@gmail.com');
+dbms_output.put_line(age);
+end;
+
+*/
+--function to get the price of a member based on their email address
+create or replace function get_price
+--one variable which is email address
+    (v_email varchar2)
+--that returns a numbers
+    return number
+is 
+    v_price number;
+begin
+    select membership_price into v_price
+    from member
+    where email=v_email;
+    return v_price;
+--exception handling for when a user enters an email which is not on the data base
+exception 
+    when others
+    then
+    dbms_output.put_line('Please check email address spelling');
+end;
+    
+/* Example below
+
+ begin
+    dbms_output.put_line(get_price('rorytokeeffe@gmail.com'));
+    end;
+
+*/
+
+• A package containing the subprograms 
+
+create or replace package priceinc_addmember
+--package for the two procedures of adding a member and increasing the price
+    is 
+procedure
+    add_member(v_email varchar2, v_fname varchar2, v_lname varchar2, v_dob date, v_join_date date, v_membership_plan varchar2, v_membership_price NUMBER, v_address varchar2, v_credit_card_no long, v_member_until date, v_auto_renew_member varchar);
+    
+    
+procedure
+    membership_price_inc(m_email varchar2, m_price_inc number);
+    
+end;
+
+    --Then the package body
+
+create or replace package body priceinc_addmember
+     
+     is
+     
+procedure
+    add_member(v_email varchar2, v_fname varchar2, v_lname varchar2, v_dob date, v_join_date date, v_membership_plan varchar2, v_membership_price NUMBER, v_address varchar2, v_credit_card_no long, v_member_until date, v_auto_renew_member varchar)
+     is
+begin
+--declare member is film_tvseries.member;
+    insert into member(email, fname, lname, dob, join_date, membership_plan, membership_price, address, credit_card_no, member_until, auto_renew_member)
+    values(v_email, v_fname, v_lname, v_dob, v_join_date, v_membership_plan, v_membership_price, v_address, v_credit_card_no, v_member_until, v_auto_renew_member);
+    dbms_output.put_line('Inserted new member with email ' || v_email);
+end;
+
+procedure
+    membership_price_inc(m_email in varchar2, m_price_inc in number)
+    
+is
+begin
+    update member
+    
+    set membership_price = membership_price + m_price_inc
+    where email = m_email;
+    commit;
+end;
+    
+end;
+
+/*
+execute PRICEINC_ADDMEMBER.membership_price_inc('rorytokeeffe@gmail.com', 1);
+*/
+
+-----Second package
+
+
+--package to include the two functions    
+create or replace package age_price
+    
+	is
+    
+function get_age(me_email varchar2)
+    return number;
+    
+    
+function get_price(m_email varchar2)
+    return number;
+end;
+
+
+
+
+create or replace package body age_price
+    is
+function get_age(me_email varchar2)
+    return number
+    is v_age number;
+    
+begin
+    
+    select trunc(months_between(SYSDATE, dob) / 12) into v_age from member
+
+    where email=me_email;
+return v_age;
+end;
+
+    
+function get_price(m_email varchar2)
+   return number
+   is v_price member.membership_price%type;
+   
+begin
+    select membership_price into v_price
+    from member
+    where email=m_email;
+    return v_price;
+end;
+end;
+
+   
+/* Examples below
+
+ 
+*/
+
+
+
